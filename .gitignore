@@ -1,19 +1,14 @@
-# Node modules
+# Ignore heavy dependencies
 node_modules/
+client/node_modules/
+server/node_modules/
 
-# Environment variables
+# Ignore secret keys (CRITICAL)
 .env
 server/.env
 
-# Logs
-logs
-*.log
+# Ignore build files
+client/dist/
 
-# OS files
+# Mac system files
 .DS_Store
-
-# Build folders (if using React / frontend)
-dist/
-build/
-
-

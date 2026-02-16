@@ -2,13 +2,24 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
+
+const mongoose = require('mongoose');
+
+// Add this after your middlewares
+
+
 const app = express();
 
 // 🔹 Middleware
 app.use(cors());
 app.use(express.json());
 
-// 🔹 Routes
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch(err => console.log("❌ DB Error:", err));
+
+
+  // 🔹 Routes
 const vibeRoute = require("./routes/vibe");
 app.use("/api/vibe", vibeRoute);
 

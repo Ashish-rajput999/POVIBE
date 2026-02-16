@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+body {
+  background-color: #09090b; /* Deep Dark */
+  color: white;
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Optional: Smooth scrolling for the feed */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 10px;
+}
