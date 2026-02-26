@@ -27,7 +27,7 @@
 
 html,
 body {
-  height: 100%;
+  min-height: 100%;
   background: var(--bg);
   color: var(--text-primary);
   font-family: 'Inter', sans-serif;
@@ -40,6 +40,8 @@ body {
   flex-direction: column;
   align-items: center;
   padding: 60px 20px 40px;
+  padding-bottom: 100px;
+  background: var(--bg);
 }
 
 /* ── Header ── */
@@ -238,7 +240,8 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   text-decoration: none;
-  transition: background 0.15s, border-color 0.15s;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.2s;
 }
 
 .song-item:hover {
@@ -246,12 +249,48 @@ body {
   border-color: rgba(124, 92, 252, 0.25);
 }
 
-.song-item img {
-  width: 40px;
-  height: 40px;
+.song-item.song-playing {
+  background: rgba(124, 92, 252, 0.08);
+  border-color: rgba(124, 92, 252, 0.35);
+  box-shadow: 0 2px 16px rgba(124, 92, 252, 0.12);
+}
+
+/* Album art with play overlay */
+.song-art-wrap {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.song-art-wrap img {
+  width: 44px;
+  height: 44px;
   border-radius: 6px;
   object-fit: cover;
-  flex-shrink: 0;
+  display: block;
+}
+
+.song-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 6px;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.song-item:hover .song-play-overlay,
+.song-playing .song-play-overlay {
+  opacity: 1;
+}
+
+.song-playing .song-play-overlay {
+  background: rgba(124, 92, 252, 0.5);
 }
 
 .song-info {
@@ -268,20 +307,26 @@ body {
   text-overflow: ellipsis;
 }
 
+.song-playing .song-name {
+  color: var(--accent-hover);
+}
+
 .song-artist {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 2px;
 }
 
-.song-link-icon {
+.song-connect-hint {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
   flex-shrink: 0;
-  opacity: 0.4;
-  transition: opacity 0.15s;
-}
-
-.song-item:hover .song-link-icon {
-  opacity: 0.9;
 }
 
 /* ── Recent Searches ── */
@@ -521,4 +566,130 @@ body {
 
 .spotify-logout:hover {
   color: var(--error);
+}
+
+/* ── Bottom Player Bar ── */
+.player-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: rgba(20, 20, 22, 0.92);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 1000;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+.player-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.player-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+.player-track-info {
+  min-width: 0;
+}
+
+.player-track-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+.player-track-artist {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.player-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 50%;
+  transition: color 0.15s, transform 0.15s;
+}
+
+.player-btn:hover {
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.player-btn-main {
+  width: 40px;
+  height: 40px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 50%;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.2s;
+}
+
+.player-btn-main:hover {
+  background: var(--accent-hover);
+  color: #fff;
+  transform: scale(1.08);
+  box-shadow: 0 2px 16px var(--accent-glow);
+}
+
+.player-right {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.player-device-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 20px;
 }

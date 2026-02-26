@@ -17,6 +17,13 @@ function clearAuth() {
   localStorage.removeItem('povibe_auth');
 }
 
+// Extract Spotify track ID from URL
+function getTrackId(spotifyUrl) {
+  if (!spotifyUrl) return null;
+  const match = spotifyUrl.match(/track\/([a-zA-Z0-9]+)/);
+  return match ? match[1] : null;
+}
+
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -36,20 +43,37 @@ function SearchIcon() {
   );
 }
 
-function ExternalLinkIcon() {
-  return (
-    <svg className="song-link-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9" />
-      <polyline points="10 1 15 1 15 6" />
-      <line x1="15" y1="1" x2="7" y2="9" />
-    </svg>
-  );
-}
-
 function SpotifyIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+    </svg>
+  );
+}
+
+function PlayIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
+      <path d="M4 2.5v11l9-5.5L4 2.5z" />
+    </svg>
+  );
+}
+
+function PauseIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
+      <rect x="3" y="2" width="4" height="12" rx="1" />
+      <rect x="9" y="2" width="4" height="12" rx="1" />
+    </svg>
+  );
+}
+
+function SkipIcon({ size = 16, direction = 'next' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor"
+      style={direction === 'prev' ? { transform: 'rotate(180deg)' } : {}}>
+      <path d="M2 2.5v11l7-5.5L2 2.5z" />
+      <path d="M9 2.5v11l7-5.5L9 2.5z" />
     </svg>
   );
 }
@@ -98,6 +122,15 @@ export default function App() {
   const [refreshToken, setRefreshToken] = useState(null);
   const [user, setUser] = useState(null);
   const refreshTimer = useRef(null);
+
+  // Spotify Web Playback SDK state
+  const [player, setPlayer] = useState(null);
+  const [deviceId, setDeviceId] = useState(null);
+  const [sdkReady, setSdkReady] = useState(false);
+  const [isPaused, setIsPaused] = useState(true);
+  const [currentTrack, setCurrentTrack] = useState(null);
+  const [playingIndex, setPlayingIndex] = useState(null);
+  const playerRef = useRef(null);
 
   // ── Token refresh function ──
   const refreshAccessToken = useCallback(async (rt) => {
@@ -186,11 +219,133 @@ export default function App() {
   }, [token]);
 
   const handleLogout = () => {
+    if (playerRef.current) {
+      playerRef.current.disconnect();
+      playerRef.current = null;
+    }
+    setPlayer(null);
+    setDeviceId(null);
+    setSdkReady(false);
+    setCurrentTrack(null);
+    setIsPaused(true);
+    setPlayingIndex(null);
     setToken(null);
     setRefreshToken(null);
     setUser(null);
     clearAuth();
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
+  };
+
+  // ── Initialize Spotify Web Playback SDK ──
+  useEffect(() => {
+    if (!token) return;
+
+    // If player already exists, just update the token
+    if (playerRef.current) return;
+
+    const initPlayer = () => {
+      const p = new window.Spotify.Player({
+        name: 'POVibe Player',
+        getOAuthToken: cb => { cb(token); },
+        volume: 0.7
+      });
+
+      p.addListener('ready', ({ device_id }) => {
+        console.log('🎵 POVibe Player ready, Device ID:', device_id);
+        setDeviceId(device_id);
+        setSdkReady(true);
+      });
+
+      p.addListener('not_ready', ({ device_id }) => {
+        console.log('⚠️ Device offline:', device_id);
+        setSdkReady(false);
+      });
+
+      p.addListener('player_state_changed', (state) => {
+        if (!state) return;
+        setCurrentTrack(state.track_window.current_track);
+        setIsPaused(state.paused);
+      });
+
+      p.addListener('initialization_error', ({ message }) => {
+        console.error('SDK Init Error:', message);
+      });
+
+      p.addListener('authentication_error', ({ message }) => {
+        console.error('SDK Auth Error:', message);
+      });
+
+      p.addListener('account_error', ({ message }) => {
+        console.error('SDK Account Error (Premium required):', message);
+      });
+
+      p.connect();
+      setPlayer(p);
+      playerRef.current = p;
+    };
+
+    if (window.Spotify) {
+      initPlayer();
+    } else {
+      window.onSpotifyWebPlaybackSDKReady = initPlayer;
+    }
+
+    return () => {
+      // Don't disconnect on cleanup — keep player alive
+    };
+  }, [token]);
+
+  // ── Play a specific track via Spotify Web API ──
+  const playSong = async (song, index) => {
+    const trackId = getTrackId(song.spotifyUrl);
+    if (!trackId) return;
+
+    if (!token || !deviceId) {
+      // Not logged in or SDK not ready — open Spotify instead
+      window.open(song.spotifyUrl, '_blank');
+      return;
+    }
+
+    try {
+      const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          uris: [`spotify:track:${trackId}`],
+        }),
+      });
+
+      if (res.status === 403) {
+        setError('Spotify Premium is required to play music in-app.');
+        return;
+      }
+
+      if (!res.ok && res.status !== 204) {
+        // Try refreshing token
+        if (refreshToken) {
+          const newToken = await refreshAccessToken(refreshToken);
+          if (newToken) {
+            // Retry with new token
+            await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${newToken}`,
+              },
+              body: JSON.stringify({ uris: [`spotify:track:${trackId}`] }),
+            });
+          }
+        }
+      }
+
+      setPlayingIndex(index);
+    } catch (err) {
+      console.error('Play error:', err);
+      window.open(song.spotifyUrl, '_blank');
+    }
   };
 
   const fetchFeed = useCallback(async () => {
@@ -317,22 +472,27 @@ export default function App() {
               <>
                 <div className="songs-list">
                   {result.songs.slice(0, visibleSongs).map((song, i) => (
-                    <a
+                    <div
                       key={i}
-                      href={song.spotifyUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="song-item"
+                      className={`song-item ${playingIndex === i ? 'song-playing' : ''}`}
+                      onClick={() => playSong(song, i)}
                     >
-                      {song.albumArt && (
-                        <img src={song.albumArt} alt={song.name} />
-                      )}
+                      <div className="song-art-wrap">
+                        {song.albumArt && (
+                          <img src={song.albumArt} alt={song.name} />
+                        )}
+                        <div className="song-play-overlay">
+                          {playingIndex === i && !isPaused ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
+                        </div>
+                      </div>
                       <div className="song-info">
                         <div className="song-name">{song.name}</div>
                         <div className="song-artist">{song.artist}</div>
                       </div>
-                      <ExternalLinkIcon />
-                    </a>
+                      {!token && (
+                        <span className="song-connect-hint">Connect to play</span>
+                      )}
+                    </div>
                   ))}
                 </div>
                 {visibleSongs < result.songs.length && (
@@ -374,6 +534,37 @@ export default function App() {
           )}
         </div>
       </section>
+
+      {/* ── Bottom Player Bar ── */}
+      {currentTrack && (
+        <div className="player-bar">
+          <div className="player-track">
+            <img
+              className="player-art"
+              src={currentTrack.album.images[0]?.url}
+              alt={currentTrack.name}
+            />
+            <div className="player-track-info">
+              <div className="player-track-name">{currentTrack.name}</div>
+              <div className="player-track-artist">{currentTrack.artists[0]?.name}</div>
+            </div>
+          </div>
+          <div className="player-controls">
+            <button className="player-btn" onClick={() => player?.previousTrack()}>
+              <SkipIcon size={14} direction="prev" />
+            </button>
+            <button className="player-btn player-btn-main" onClick={() => player?.togglePlay()}>
+              {isPaused ? <PlayIcon size={22} /> : <PauseIcon size={22} />}
+            </button>
+            <button className="player-btn" onClick={() => player?.nextTrack()}>
+              <SkipIcon size={14} direction="next" />
+            </button>
+          </div>
+          <div className="player-right">
+            <span className="player-device-label">🎵 POVibe</span>
+          </div>
+        </div>
+      )}
     </>
   );
 }

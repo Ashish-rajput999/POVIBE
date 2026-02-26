@@ -13,6 +13,7 @@ const SAFE_SEEDS = ["acoustic", "alt-rock", "ambient", "classical", "dance", "de
 // 2. SPOTIFY AUTH HELPER
 const getSpotifyToken = async () => {
     try {
+        console.log("🎧 [SPOTIFY] Requesting client credentials token...");
         const base64Auth = Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString("base64");
         const response = await axios({
             method: "post",
@@ -20,8 +21,10 @@ const getSpotifyToken = async () => {
             data: qs.stringify({ grant_type: "client_credentials" }),
             headers: { Authorization: `Basic ${base64Auth}`, "Content-Type": "application/x-www-form-urlencoded" },
         });
+        console.log("✅ [SPOTIFY] Token acquired");
         return response.data.access_token;
     } catch (err) {
+        console.error("❌ [SPOTIFY] Auth failed:", err.response?.data || err.message);
         throw new Error("Spotify Auth Failed");
     }
 };
@@ -35,8 +38,11 @@ const getPerfectSongs = async (token, mood) => {
     const cleanDance = Math.min(Math.max(parseFloat(mood.danceability || 0.5), 0), 1).toFixed(1);
     const cleanGenre = SAFE_SEEDS.includes(mood.genre) ? mood.genre : "pop";
 
+    console.log("🎯 [ENGINE] Params → genre:", cleanGenre, "energy:", cleanEnergy, "valence:", cleanValence, "dance:", cleanDance);
+
     try {
         // Attempt Engine A: Precision Recommendations
+        console.log("🅰️  [ENGINE A] Trying Spotify Recommendations API...");
         const response = await axios({
             method: "get",
             url: "https://api.spotify.com/v1/recommendations",
@@ -49,22 +55,28 @@ const getPerfectSongs = async (token, mood) => {
             },
             headers: { Authorization: `Bearer ${token}` },
         });
-        if (response.data.tracks.length > 0) return response.data.tracks;
+        if (response.data.tracks.length > 0) {
+            console.log("✅ [ENGINE A] Got", response.data.tracks.length, "tracks");
+            return response.data.tracks;
+        }
         throw new Error("No tracks found in Engine A");
 
     } catch (err) {
-        console.log("⚠️ Engine A failed, using Engine B (Search phrase accuracy)...");
+        console.log("⚠️  [ENGINE A] Failed:", err.message, "— falling back to Engine B");
         // Attempt Engine B: Accuracy Search (uses the AI's searchPhrase)
+        const searchQuery = mood.searchPhrase || "chill vibey music";
+        console.log("🅱️  [ENGINE B] Searching:", searchQuery);
         const search = await axios({
             method: "get",
             url: "https://api.spotify.com/v1/search",
-            params: { 
-                q: mood.searchPhrase || "chill vibey music", 
-                type: "track", 
-                limit: cleanLimit 
+            params: {
+                q: searchQuery,
+                type: "track",
+                limit: cleanLimit
             },
             headers: { Authorization: `Bearer ${token}` },
         });
+        console.log("✅ [ENGINE B] Got", search.data.tracks.items.length, "tracks");
         return search.data.tracks.items;
     }
 };
@@ -72,13 +84,18 @@ const getPerfectSongs = async (token, mood) => {
 // 4. POST: GENERATE AND SAVE VIBE
 router.post("/", async (req, res) => {
     const { userPOV } = req.body;
+    console.log("\n🎵 ════════════════════════════════════");
+    console.log("🎵 [VIBE] New request:", userPOV);
+    console.log("🎵 ════════════════════════════════════");
 
     if (!userPOV || userPOV.trim().length < 3) {
+        console.log("❌ [VIBE] Input too short, rejected");
         return res.status(400).json({ error: "Input too short", message: "Describe your POV in more detail!" });
     }
 
     try {
         // AI Logic: Analysis
+        console.log("🤖 [AI] Sending to Groq for mood analysis...");
         const chatCompletion = await groq.chat.completions.create({
             messages: [
                 {
@@ -92,13 +109,19 @@ router.post("/", async (req, res) => {
         });
 
         const aiData = JSON.parse(chatCompletion.choices[0].message.content);
+        console.log("🤖 [AI] Response:", JSON.stringify(aiData, null, 2));
+
         if (aiData.isValid === false) {
+            console.log("❌ [AI] Marked as invalid vibe");
             return res.status(400).json({ error: "Invalid Vibe", message: "Tell me a real feeling or scene!" });
         }
 
         const mood = aiData.analysis || aiData;
+        console.log("🎭 [MOOD] Genre:", mood.genre, "| Energy:", mood.energy, "| Valence:", mood.valence, "| Phrase:", mood.searchPhrase);
+
         const token = await getSpotifyToken();
         const tracks = await getPerfectSongs(token, mood);
+        console.log("🎶 [TRACKS] Found", tracks.length, "tracks");
 
         // --- DATABASE SAVE ---
         const savedVibe = new Vibe({
@@ -115,7 +138,11 @@ router.post("/", async (req, res) => {
         });
 
         await savedVibe.save();
-        console.log("💾 Vibe saved to POVibe Cloud Feed");
+        console.log("💾 [DB] Vibe saved to database");
+
+        const songNames = tracks.slice(0, 3).map(t => t.name).join(", ");
+        console.log("✅ [VIBE] Success! Top songs:", songNames, tracks.length > 3 ? `(+${tracks.length - 3} more)` : "");
+        console.log("🎵 ════════════════════════════════════\n");
 
         res.json({
             success: true,
@@ -130,7 +157,8 @@ router.post("/", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("SERVER ERROR:", error.response?.data || error.message);
+        console.error("❌ [VIBE] Pipeline failed:", error.response?.data || error.message);
+        console.error("❌ [VIBE] Stack:", error.stack?.split("\n").slice(0, 3).join(" → "));
         res.status(500).json({ error: "POVibe Engine Failed", message: error.message });
     }
 });
@@ -138,10 +166,11 @@ router.post("/", async (req, res) => {
 // 5. GET: THE GLOBAL COMMUNITY FEED
 router.get("/feed", async (req, res) => {
     try {
-        // Fetches the latest 20 vibes generated globally
         const feed = await Vibe.find().sort({ createdAt: -1 }).limit(20);
+        console.log("📡 [FEED] Served", feed.length, "vibes");
         res.json(feed);
     } catch (err) {
+        console.error("❌ [FEED] Failed:", err.message);
         res.status(500).json({ error: "Could not fetch global feed" });
     }
 });

@@ -12,6 +12,7 @@ const getBasicAuth = () =>
 
 // LOGIN
 router.get("/login", (req, res) => {
+  console.log("🔐 [AUTH] Login initiated — redirecting to Spotify");
   const scope = [
     "user-read-email",
     "user-read-private",
@@ -29,12 +30,19 @@ router.get("/login", (req, res) => {
       redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
     });
 
+  console.log("🔐 [AUTH] Redirect URI:", process.env.SPOTIFY_REDIRECT_URI);
   res.redirect(authURL);
 });
 
-// CALLBACK
+
 router.get("/callback", async (req, res) => {
   const code = req.query.code;
+  console.log("🔐 [AUTH] Callback received — exchanging code for tokens");
+
+  if (!code) {
+    console.error("❌ [AUTH] No authorization code in callback");
+    return res.send("Spotify authentication failed — no code received");
+  }
 
   try {
     const response = await axios.post(
@@ -53,12 +61,13 @@ router.get("/callback", async (req, res) => {
     );
 
     const { access_token, refresh_token, expires_in } = response.data;
+    console.log("✅ [AUTH] Tokens received — expires in", expires_in, "seconds");
 
     res.redirect(
       `http://localhost:5174/?access_token=${access_token}&refresh_token=${refresh_token}&expires_in=${expires_in}`
     );
   } catch (err) {
-    console.error(err.response?.data || err.message);
+    console.error("❌ [AUTH] Token exchange failed:", err.response?.data || err.message);
     res.send("Spotify authentication failed");
   }
 });
@@ -66,7 +75,12 @@ router.get("/callback", async (req, res) => {
 // REFRESH TOKEN
 router.post("/refresh", async (req, res) => {
   const { refresh_token } = req.body;
-  if (!refresh_token) return res.status(400).json({ error: "No refresh token" });
+  console.log("🔄 [AUTH] Token refresh requested");
+
+  if (!refresh_token) {
+    console.error("❌ [AUTH] Refresh failed — no refresh_token provided");
+    return res.status(400).json({ error: "No refresh token" });
+  }
 
   try {
     const response = await axios.post(
@@ -83,11 +97,13 @@ router.post("/refresh", async (req, res) => {
       }
     );
 
+    console.log("✅ [AUTH] Token refreshed — new token expires in", response.data.expires_in, "seconds");
     res.json({
       access_token: response.data.access_token,
       expires_in: response.data.expires_in,
     });
   } catch (err) {
+    console.error("❌ [AUTH] Refresh failed:", err.response?.data || err.message);
     res.status(401).json({ error: "Could not refresh token" });
   }
 });
@@ -95,12 +111,16 @@ router.post("/refresh", async (req, res) => {
 // GET USER PROFILE
 router.get("/me", async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "No token provided" });
+  if (!token) {
+    console.error("❌ [AUTH] /me called without token");
+    return res.status(401).json({ error: "No token provided" });
+  }
 
   try {
     const { data } = await axios.get("https://api.spotify.com/v1/me", {
       headers: { Authorization: `Bearer ${token}` },
     });
+    console.log("👤 [AUTH] Profile fetched for:", data.display_name, `(${data.id})`);
     res.json({
       name: data.display_name,
       email: data.email,
@@ -109,6 +129,7 @@ router.get("/me", async (req, res) => {
       id: data.id,
     });
   } catch (err) {
+    console.error("❌ [AUTH] Profile fetch failed:", err.response?.status, err.response?.data?.error?.message || err.message);
     res.status(401).json({ error: "Invalid or expired token" });
   }
 });
