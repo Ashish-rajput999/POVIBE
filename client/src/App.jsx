@@ -1,8 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import './index.css';
 
 const API_BASE = 'http://localhost:8000/api/vibe';
 const AUTH_BASE = 'http://localhost:8000/auth';
+
+// ── localStorage helpers ──
+function saveAuth(data) {
+  localStorage.setItem('povibe_auth', JSON.stringify(data));
+}
+function loadAuth() {
+  try {
+    return JSON.parse(localStorage.getItem('povibe_auth'));
+  } catch { return null; }
+}
+function clearAuth() {
+  localStorage.removeItem('povibe_auth');
+}
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -82,22 +95,77 @@ export default function App() {
 
   // Spotify auth state
   const [token, setToken] = useState(null);
+  const [refreshToken, setRefreshToken] = useState(null);
   const [user, setUser] = useState(null);
+  const refreshTimer = useRef(null);
 
-  // On mount: parse token from URL (after Spotify redirect)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const accessToken = params.get('access_token');
-    if (accessToken) {
-      setToken(accessToken);
-      // Clean the URL
-      window.history.replaceState({}, document.title, '/');
+  // ── Token refresh function ──
+  const refreshAccessToken = useCallback(async (rt) => {
+    try {
+      const res = await fetch(`${AUTH_BASE}/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: rt }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setToken(data.access_token);
+      // Save updated token
+      const stored = loadAuth();
+      if (stored) {
+        saveAuth({ ...stored, access_token: data.access_token, expires_in: data.expires_in });
+      }
+      // Schedule next refresh (5 min before expiry)
+      scheduleRefresh(data.expires_in, rt);
+      return data.access_token;
+    } catch {
+      // Refresh failed — force logout
+      handleLogout();
+      return null;
     }
   }, []);
 
-  // Fetch Spotify profile when token is set
+  // Schedule a token refresh timer
+  const scheduleRefresh = useCallback((expiresIn, rt) => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    // Refresh 5 minutes before expiry (or 30s if less than 5 min)
+    const ms = Math.max((expiresIn - 300) * 1000, 30000);
+    refreshTimer.current = setTimeout(() => refreshAccessToken(rt), ms);
+  }, [refreshAccessToken]);
+
+  // ── On mount: check URL params first, then localStorage ──
   useEffect(() => {
-    if (!token) return;
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('access_token');
+    const urlRefresh = params.get('refresh_token');
+    const urlExpires = params.get('expires_in');
+
+    if (urlToken && urlRefresh) {
+      // Fresh login from Spotify redirect
+      setToken(urlToken);
+      setRefreshToken(urlRefresh);
+      saveAuth({ access_token: urlToken, refresh_token: urlRefresh, expires_in: urlExpires });
+      scheduleRefresh(parseInt(urlExpires) || 3600, urlRefresh);
+      window.history.replaceState({}, document.title, '/');
+    } else {
+      // Try restoring from localStorage
+      const stored = loadAuth();
+      if (stored?.access_token && stored?.refresh_token) {
+        setToken(stored.access_token);
+        setRefreshToken(stored.refresh_token);
+        // Token might be stale — refresh immediately to be safe
+        refreshAccessToken(stored.refresh_token);
+      }
+    }
+
+    return () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    };
+  }, []);
+
+  // Fetch Spotify profile when token changes
+  useEffect(() => {
+    if (!token) { setUser(null); return; }
     (async () => {
       try {
         const res = await fetch(`${AUTH_BASE}/me`, {
@@ -107,16 +175,22 @@ export default function App() {
         const data = await res.json();
         setUser(data);
       } catch {
-        // Token expired or invalid — clear it
-        setToken(null);
-        setUser(null);
+        // Token invalid — try refresh
+        if (refreshToken) {
+          refreshAccessToken(refreshToken);
+        } else {
+          handleLogout();
+        }
       }
     })();
   }, [token]);
 
   const handleLogout = () => {
     setToken(null);
+    setRefreshToken(null);
     setUser(null);
+    clearAuth();
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
   };
 
   const fetchFeed = useCallback(async () => {

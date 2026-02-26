@@ -4,6 +4,12 @@ const querystring = require("querystring");
 
 const router = express.Router();
 
+const getBasicAuth = () =>
+  "Basic " +
+  Buffer.from(
+    process.env.SPOTIFY_CLIENT_ID + ":" + process.env.SPOTIFY_CLIENT_SECRET
+  ).toString("base64");
+
 // LOGIN
 router.get("/login", (req, res) => {
   const scope = [
@@ -41,25 +47,48 @@ router.get("/callback", async (req, res) => {
       {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          Authorization:
-            "Basic " +
-            Buffer.from(
-              process.env.SPOTIFY_CLIENT_ID +
-              ":" +
-              process.env.SPOTIFY_CLIENT_SECRET
-            ).toString("base64"),
+          Authorization: getBasicAuth(),
         },
       }
     );
 
-    const { access_token, refresh_token } = response.data;
+    const { access_token, refresh_token, expires_in } = response.data;
 
     res.redirect(
-      `http://localhost:5176/?access_token=${access_token}&refresh_token=${refresh_token}`
+      `http://localhost:5174/?access_token=${access_token}&refresh_token=${refresh_token}&expires_in=${expires_in}`
     );
   } catch (err) {
     console.error(err.response?.data || err.message);
     res.send("Spotify authentication failed");
+  }
+});
+
+// REFRESH TOKEN
+router.post("/refresh", async (req, res) => {
+  const { refresh_token } = req.body;
+  if (!refresh_token) return res.status(400).json({ error: "No refresh token" });
+
+  try {
+    const response = await axios.post(
+      "https://accounts.spotify.com/api/token",
+      querystring.stringify({
+        grant_type: "refresh_token",
+        refresh_token,
+      }),
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: getBasicAuth(),
+        },
+      }
+    );
+
+    res.json({
+      access_token: response.data.access_token,
+      expires_in: response.data.expires_in,
+    });
+  } catch (err) {
+    res.status(401).json({ error: "Could not refresh token" });
   }
 });
 
@@ -85,3 +114,4 @@ router.get("/me", async (req, res) => {
 });
 
 module.exports = router;
+
