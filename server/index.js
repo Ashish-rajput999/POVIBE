@@ -23,7 +23,10 @@ mongoose.connect(process.env.MONGO_URI)
 const vibeRoute = require("./routes/vibe");
 app.use("/api/vibe", vibeRoute);
 
-// 🔹 Root Route (Test)
+const authRoute = require("./routes/auth");
+app.use("/auth", authRoute);
+
+// 🔹 Root Route (Test)√
 app.get("/", (req, res) => {
   res.send("POVibe Server is Running! 🚀");
 });

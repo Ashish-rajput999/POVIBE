@@ -450,3 +450,75 @@ body {
     transform: translateY(0);
   }
 }
+
+/* ── Spotify Auth ── */
+.spotify-auth {
+  margin-top: 20px;
+  animation: fadeIn 0.4s ease;
+}
+
+.spotify-connect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #1db954;
+  color: #fff;
+  text-decoration: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 26px;
+  border-radius: 50px;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  letter-spacing: 0.01em;
+}
+
+.spotify-connect-btn:hover {
+  background: #1ed760;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(29, 185, 84, 0.3);
+}
+
+.spotify-connect-btn:active {
+  transform: translateY(0);
+}
+
+.spotify-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 6px 14px 6px 6px;
+  border-radius: 50px;
+}
+
+.spotify-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.spotify-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.spotify-logout {
+  background: none;
+  border: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.spotify-logout:hover {
+  color: var(--error);
+}

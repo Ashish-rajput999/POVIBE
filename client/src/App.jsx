@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import './index.css';
 
 const API_BASE = 'http://localhost:8000/api/vibe';
+const AUTH_BASE = 'http://localhost:8000/auth';
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -28,6 +29,14 @@ function ExternalLinkIcon() {
       <path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9" />
       <polyline points="10 1 15 1 15 6" />
       <line x1="15" y1="1" x2="7" y2="9" />
+    </svg>
+  );
+}
+
+function SpotifyIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
     </svg>
   );
 }
@@ -70,6 +79,45 @@ export default function App() {
   const [feed, setFeed] = useState([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [visibleSongs, setVisibleSongs] = useState(5);
+
+  // Spotify auth state
+  const [token, setToken] = useState(null);
+  const [user, setUser] = useState(null);
+
+  // On mount: parse token from URL (after Spotify redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const accessToken = params.get('access_token');
+    if (accessToken) {
+      setToken(accessToken);
+      // Clean the URL
+      window.history.replaceState({}, document.title, '/');
+    }
+  }, []);
+
+  // Fetch Spotify profile when token is set
+  useEffect(() => {
+    if (!token) return;
+    (async () => {
+      try {
+        const res = await fetch(`${AUTH_BASE}/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setUser(data);
+      } catch {
+        // Token expired or invalid — clear it
+        setToken(null);
+        setUser(null);
+      }
+    })();
+  }, [token]);
+
+  const handleLogout = () => {
+    setToken(null);
+    setUser(null);
+  };
 
   const fetchFeed = useCallback(async () => {
     try {
@@ -114,7 +162,6 @@ export default function App() {
       setResult(data);
       setVisibleSongs(5);
       setPov('');
-      // Refresh feed after new vibe is saved
       fetchFeed();
     } catch {
       setError('Could not reach the POVibe server. Is it running?');
@@ -136,6 +183,24 @@ export default function App() {
         <p className="header-logo">✦ POVibe</p>
         <h1>Turn your <span>POV</span> into a Soundtrack</h1>
         <p>Describe a moment, mood, or feeling — get the perfect playlist.</p>
+
+        {/* Spotify Auth */}
+        <div className="spotify-auth">
+          {user ? (
+            <div className="spotify-profile">
+              {user.avatar && (
+                <img className="spotify-avatar" src={user.avatar} alt={user.name} />
+              )}
+              <span className="spotify-name">{user.name}</span>
+              <button className="spotify-logout" onClick={handleLogout}>Logout</button>
+            </div>
+          ) : (
+            <a className="spotify-connect-btn" href={`${AUTH_BASE}/login`}>
+              <SpotifyIcon />
+              Connect with Spotify
+            </a>
+          )}
+        </div>
       </header>
 
       {/* Search Card */}
