@@ -63,9 +63,11 @@ router.get("/callback", async (req, res) => {
     const { access_token, refresh_token, expires_in } = response.data;
     console.log("✅ [AUTH] Tokens received — expires in", expires_in, "seconds");
 
-    res.redirect(
-      `http://localhost:5174/?access_token=${access_token}&refresh_token=${refresh_token}&expires_in=${expires_in}`
-    );
+    // Use CLIENT_URL from env, supporting multiple dev ports
+    const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+    const redirectUrl = `${clientUrl}/?access_token=${access_token}&refresh_token=${refresh_token}&expires_in=${expires_in}`;
+    console.log("✅ [AUTH] Redirecting to:", clientUrl);
+    res.redirect(redirectUrl);
   } catch (err) {
     console.error("❌ [AUTH] Token exchange failed:", err.response?.data || err.message);
     res.send("Spotify authentication failed");
@@ -129,10 +131,24 @@ router.get("/me", async (req, res) => {
       id: data.id,
     });
   } catch (err) {
-    console.error("❌ [AUTH] Profile fetch failed:", err.response?.status, err.response?.data?.error?.message || err.message);
+    const status = err.response?.status;
+    console.error("❌ [AUTH] Profile fetch failed:", status, err.response?.data?.error?.message || err.message);
+    if (status === 403) {
+      return res.status(403).json({ error: "not_a_test_user", message: "Your Spotify account needs to be added as a test user in the Spotify Developer Dashboard." });
+    }
     res.status(401).json({ error: "Invalid or expired token" });
   }
 });
 
 module.exports = router;
+
+
+
+
+
+
+
+
+
+
 

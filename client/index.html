@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" style="background:#0d0d0f">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
@@ -7,9 +7,16 @@
   <meta name="description"
     content="Turn your POV into a Spotify playlist. Describe a mood or moment and get the perfect soundtrack." />
   <title>POVibe — Turn Your POV Into a Soundtrack</title>
+  <script>
+    // Apply saved theme BEFORE React loads to prevent flash
+    (function () {
+      var theme = localStorage.getItem('povibe_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
 </head>
 
-<body style="background:#0d0d0f">
+<body>
   <div id="root"></div>
   <script src="https://sdk.scdn.co/spotify-player.js" async></script>
   <script type="module" src="/src/main.jsx"></script>

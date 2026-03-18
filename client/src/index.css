@@ -9,6 +9,7 @@
 }
 
 :root {
+  color-scheme: dark;
   --bg: #0d0d0f;
   --surface: #141416;
   --surface-2: #1c1c1f;
@@ -23,6 +24,26 @@
   --error: #f87171;
   --radius: 12px;
   --radius-sm: 8px;
+  --player-bg: rgba(20, 20, 22, 0.92);
+  --shadow-color: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f3f0;
+  --surface: #ffffff;
+  --surface-2: #edeae6;
+  --border: rgba(0, 0, 0, 0.08);
+  --accent: #6c47ff;
+  --accent-glow: rgba(108, 71, 255, 0.18);
+  --accent-hover: #5a35e8;
+  --text-primary: #1a1a1f;
+  --text-secondary: #5c5c6d;
+  --text-muted: #9090a0;
+  --success: #22c55e;
+  --error: #ef4444;
+  --player-bg: rgba(255, 255, 255, 0.88);
+  --shadow-color: rgba(0, 0, 0, 0.08);
 }
 
 html,
@@ -32,6 +53,7 @@ body {
   color: var(--text-primary);
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.35s ease, color 0.35s ease;
 }
 
 #root {
@@ -39,18 +61,116 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 60px 20px 40px;
+  padding: 80px 20px 40px;
   padding-bottom: 100px;
   background: var(--bg);
+  transition: background-color 0.35s ease;
 }
 
-/* ── Header ── */
-.header {
+/* ── Navbar ── */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  background: var(--surface);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border-bottom: 1px solid var(--border);
+  z-index: 999;
+  transition: background-color 0.35s ease, border-color 0.35s ease;
+}
+
+[data-theme="light"] .navbar {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.navbar-logo {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: var(--accent);
+  text-transform: uppercase;
+  cursor: default;
+  user-select: none;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* ── Theme Toggle ── */
+.theme-toggle {
+  position: relative;
+  width: 60px;
+  height: 32px;
+  background: #1e1b4b;
+  border: 2px solid rgba(124, 92, 252, 0.4);
+  border-radius: 50px;
+  cursor: pointer;
+  transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+  flex-shrink: 0;
+  box-shadow: 0 0 12px rgba(124, 92, 252, 0.15);
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 18px rgba(124, 92, 252, 0.3);
+}
+
+[data-theme="light"] .theme-toggle {
+  background: #fef3c7;
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
+}
+
+[data-theme="light"] .theme-toggle:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.3);
+}
+
+.theme-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #7c5cfc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.35s ease, box-shadow 0.35s ease;
+  box-shadow: 0 2px 10px rgba(124, 92, 252, 0.5);
+}
+
+[data-theme="light"] .theme-toggle-thumb {
+  transform: translateX(28px);
+  background: #f59e0b;
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.5);
+}
+
+.theme-toggle-thumb svg {
+  width: 14px;
+  height: 14px;
+  color: #fff;
+}
+
+/* ── Hero / Header Text (below navbar) ── */
+.hero {
   text-align: center;
   margin-bottom: 48px;
+  margin-top: 24px;
 }
 
-.header-logo {
+.hero-logo {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.15em;
@@ -59,7 +179,7 @@ body {
   margin-bottom: 16px;
 }
 
-.header h1 {
+.hero h1 {
   font-size: clamp(28px, 5vw, 44px);
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -67,14 +187,14 @@ body {
   line-height: 1.15;
 }
 
-.header h1 span {
+.hero h1 span {
   background: linear-gradient(135deg, #7c5cfc, #c084fc);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.header p {
+.hero p {
   margin-top: 12px;
   color: var(--text-secondary);
   font-size: 15px;
@@ -89,7 +209,8 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 24px;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 40px var(--shadow-color);
+  transition: background-color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
 }
 
 .search-wrapper {
@@ -373,7 +494,7 @@ body {
   border-radius: var(--radius);
   padding: 14px 16px;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s, background-color 0.35s ease;
   animation: fadeSlideUp 0.4s ease both;
 }
 
@@ -496,9 +617,8 @@ body {
   }
 }
 
-/* ── Spotify Auth ── */
+/* ── Spotify Auth (in navbar) ── */
 .spotify-auth {
-  margin-top: 20px;
   animation: fadeIn 0.4s ease;
 }
 
@@ -579,7 +699,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background: rgba(20, 20, 22, 0.92);
+  background: var(--player-bg);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border-top: 1px solid rgba(255, 255, 255, 0.08);

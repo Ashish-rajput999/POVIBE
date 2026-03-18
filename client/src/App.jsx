@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import './index.css';
 
-const API_BASE = 'http://localhost:8000/api/vibe';
-const AUTH_BASE = 'http://localhost:8000/auth';
+const SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE = `${SERVER_URL}/api/vibe`;
+const AUTH_BASE = `${SERVER_URL}/auth`;
 
 // ── localStorage helpers ──
 function saveAuth(data) {
@@ -64,6 +65,30 @@ function PauseIcon({ size = 20 }) {
     <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor">
       <rect x="3" y="2" width="4" height="12" rx="1" />
       <rect x="9" y="2" width="4" height="12" rx="1" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="5" />
+      <line x1="12" y1="1" x2="12" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="23" />
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+      <line x1="1" y1="12" x2="3" y2="12" />
+      <line x1="21" y1="12" x2="23" y2="12" />
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
     </svg>
   );
 }
@@ -132,6 +157,21 @@ export default function App() {
   const [playingIndex, setPlayingIndex] = useState(null);
   const playerRef = useRef(null);
 
+  // Theme state
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('povibe_theme');
+    if (saved) return saved;
+    return 'dark';
+  });
+
+  // Apply theme to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('povibe_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
+
   // ── Token refresh function ──
   const refreshAccessToken = useCallback(async (rt) => {
     try {
@@ -196,6 +236,9 @@ export default function App() {
     };
   }, []);
 
+  // Track whether we already retried profile fetch (prevents infinite loop)
+  const hasRetriedProfile = useRef(false);
+
   // Fetch Spotify profile when token changes
   useEffect(() => {
     if (!token) { setUser(null); return; }
@@ -204,14 +247,28 @@ export default function App() {
         const res = await fetch(`${AUTH_BASE}/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error();
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          // 403 = not added as a test user in Spotify Dashboard
+          if (res.status === 403 && errData.error === 'not_a_test_user') {
+            setError('⚠️ Your Spotify account isn\'t added as a test user. Go to the Spotify Developer Dashboard → your app → User Management and add your email.');
+            handleLogout();
+            return;
+          }
+          throw new Error();
+        }
         const data = await res.json();
         setUser(data);
+        // Reset retry flag on success
+        hasRetriedProfile.current = false;
       } catch {
-        // Token invalid — try refresh
-        if (refreshToken) {
+        // Token invalid — try ONE refresh, then give up
+        if (refreshToken && !hasRetriedProfile.current) {
+          hasRetriedProfile.current = true;
           refreshAccessToken(refreshToken);
         } else {
+          // Already retried or no refresh token — stop the loop
+          console.warn('🔒 [AUTH] Profile fetch failed after retry — logging out');
           handleLogout();
         }
       }
@@ -407,33 +464,42 @@ export default function App() {
 
   return (
     <>
-      {/* Header */}
-      <header className="header">
-        <p className="header-logo">✦ POVibe</p>
+      {/* Navbar */}
+      <nav className="navbar">
+        <div className="navbar-right">
+          <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle theme" title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+            <div className="theme-toggle-thumb">
+              {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
+            </div>
+          </button>
+          <div className="spotify-auth">
+            {user ? (
+              <div className="spotify-profile">
+                {user.avatar && (
+                  <img className="spotify-avatar" src={user.avatar} alt={user.name} />
+                )}
+                <span className="spotify-name">{user.name}</span>
+                <button className="spotify-logout" onClick={handleLogout}>Logout</button>
+              </div>
+            ) : (
+              <a className="spotify-connect-btn" href={`${AUTH_BASE}/login`}>
+                <SpotifyIcon />
+                Connect with Spotify
+              </a>
+            )}
+          </div>
+        </div>
+      </nav >
+
+      {/* Hero */}
+      <div className="hero">
+        <p className="hero-logo">✦ POVibe</p>
         <h1>Turn your <span>POV</span> into a Soundtrack</h1>
         <p>Describe a moment, mood, or feeling — get the perfect playlist.</p>
-
-        {/* Spotify Auth */}
-        <div className="spotify-auth">
-          {user ? (
-            <div className="spotify-profile">
-              {user.avatar && (
-                <img className="spotify-avatar" src={user.avatar} alt={user.name} />
-              )}
-              <span className="spotify-name">{user.name}</span>
-              <button className="spotify-logout" onClick={handleLogout}>Logout</button>
-            </div>
-          ) : (
-            <a className="spotify-connect-btn" href={`${AUTH_BASE}/login`}>
-              <SpotifyIcon />
-              Connect with Spotify
-            </a>
-          )}
-        </div>
-      </header>
+      </div >
 
       {/* Search Card */}
-      <div className="search-card">
+      < div className="search-card" >
         <div className="search-wrapper">
           <textarea
             className="search-input"
@@ -462,56 +528,58 @@ export default function App() {
         {error && <p className="status-msg error">{error}</p>}
 
         {/* Success Result */}
-        {result && (
-          <div className="result-block">
-            <h3>Your Vibe</h3>
-            {result.interpretation && (
-              <p className="interpretation">{result.interpretation}</p>
-            )}
-            {result.songs && result.songs.length > 0 && (
-              <>
-                <div className="songs-list">
-                  {result.songs.slice(0, visibleSongs).map((song, i) => (
-                    <div
-                      key={i}
-                      className={`song-item ${playingIndex === i ? 'song-playing' : ''}`}
-                      onClick={() => playSong(song, i)}
-                    >
-                      <div className="song-art-wrap">
-                        {song.albumArt && (
-                          <img src={song.albumArt} alt={song.name} />
-                        )}
-                        <div className="song-play-overlay">
-                          {playingIndex === i && !isPaused ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
+        {
+          result && (
+            <div className="result-block">
+              <h3>Your Vibe</h3>
+              {result.interpretation && (
+                <p className="interpretation">{result.interpretation}</p>
+              )}
+              {result.songs && result.songs.length > 0 && (
+                <>
+                  <div className="songs-list">
+                    {result.songs.slice(0, visibleSongs).map((song, i) => (
+                      <div
+                        key={i}
+                        className={`song-item ${playingIndex === i ? 'song-playing' : ''}`}
+                        onClick={() => playSong(song, i)}
+                      >
+                        <div className="song-art-wrap">
+                          {song.albumArt && (
+                            <img src={song.albumArt} alt={song.name} />
+                          )}
+                          <div className="song-play-overlay">
+                            {playingIndex === i && !isPaused ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
+                          </div>
                         </div>
+                        <div className="song-info">
+                          <div className="song-name">{song.name}</div>
+                          <div className="song-artist">{song.artist}</div>
+                        </div>
+                        {!token && (
+                          <span className="song-connect-hint">Connect to play</span>
+                        )}
                       </div>
-                      <div className="song-info">
-                        <div className="song-name">{song.name}</div>
-                        <div className="song-artist">{song.artist}</div>
-                      </div>
-                      {!token && (
-                        <span className="song-connect-hint">Connect to play</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {visibleSongs < result.songs.length && (
-                  <button
-                    className="search-btn"
-                    style={{ alignSelf: 'center', marginTop: '12px' }}
-                    onClick={() => setVisibleSongs(v => v + 5)}
-                  >
-                    Show More
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
+                    ))}
+                  </div>
+                  {visibleSongs < result.songs.length && (
+                    <button
+                      className="search-btn"
+                      style={{ alignSelf: 'center', marginTop: '12px' }}
+                      onClick={() => setVisibleSongs(v => v + 5)}
+                    >
+                      Show More
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )
+        }
+      </div >
 
       {/* Recent Searches */}
-      <section className="recent-section">
+      < section className="recent-section" >
         <div className="recent-header">
           <h2>Recent Searches</h2>
           {!feedLoading && (
@@ -533,38 +601,40 @@ export default function App() {
             ))
           )}
         </div>
-      </section>
+      </section >
 
       {/* ── Bottom Player Bar ── */}
-      {currentTrack && (
-        <div className="player-bar">
-          <div className="player-track">
-            <img
-              className="player-art"
-              src={currentTrack.album.images[0]?.url}
-              alt={currentTrack.name}
-            />
-            <div className="player-track-info">
-              <div className="player-track-name">{currentTrack.name}</div>
-              <div className="player-track-artist">{currentTrack.artists[0]?.name}</div>
+      {
+        currentTrack && (
+          <div className="player-bar">
+            <div className="player-track">
+              <img
+                className="player-art"
+                src={currentTrack.album.images[0]?.url}
+                alt={currentTrack.name}
+              />
+              <div className="player-track-info">
+                <div className="player-track-name">{currentTrack.name}</div>
+                <div className="player-track-artist">{currentTrack.artists[0]?.name}</div>
+              </div>
+            </div>
+            <div className="player-controls">
+              <button className="player-btn" onClick={() => player?.previousTrack()}>
+                <SkipIcon size={14} direction="prev" />
+              </button>
+              <button className="player-btn player-btn-main" onClick={() => player?.togglePlay()}>
+                {isPaused ? <PlayIcon size={22} /> : <PauseIcon size={22} />}
+              </button>
+              <button className="player-btn" onClick={() => player?.nextTrack()}>
+                <SkipIcon size={14} direction="next" />
+              </button>
+            </div>
+            <div className="player-right">
+              <span className="player-device-label">🎵 POVibe</span>
             </div>
           </div>
-          <div className="player-controls">
-            <button className="player-btn" onClick={() => player?.previousTrack()}>
-              <SkipIcon size={14} direction="prev" />
-            </button>
-            <button className="player-btn player-btn-main" onClick={() => player?.togglePlay()}>
-              {isPaused ? <PlayIcon size={22} /> : <PauseIcon size={22} />}
-            </button>
-            <button className="player-btn" onClick={() => player?.nextTrack()}>
-              <SkipIcon size={14} direction="next" />
-            </button>
-          </div>
-          <div className="player-right">
-            <span className="player-device-label">🎵 POVibe</span>
-          </div>
-        </div>
-      )}
+        )
+      }
     </>
   );
 }
