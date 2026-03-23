@@ -27,7 +27,7 @@ router.get("/login", (req, res) => {
       response_type: "code",
       client_id: process.env.SPOTIFY_CLIENT_ID,
       scope,
-      redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
+      redirect_uri: (process.env.SPOTIFY_REDIRECT_URI || '').trim(),
     });
 
   console.log("🔐 [AUTH] Redirect URI:", process.env.SPOTIFY_REDIRECT_URI);
@@ -50,7 +50,7 @@ router.get("/callback", async (req, res) => {
       querystring.stringify({
         grant_type: "authorization_code",
         code,
-        redirect_uri: process.env.SPOTIFY_REDIRECT_URI,
+        redirect_uri: (process.env.SPOTIFY_REDIRECT_URI || '').trim(),
       }),
       {
         headers: {
