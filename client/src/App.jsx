@@ -18,7 +18,7 @@ function clearAuth() {
   localStorage.removeItem('povibe_auth');
 }
 
-// Extract Spotify track ID from URL
+
 function getTrackId(spotifyUrl) {
   if (!spotifyUrl) return null;
   const match = spotifyUrl.match(/track\/([a-zA-Z0-9]+)/);
@@ -417,6 +417,11 @@ export default function App() {
     }
   }, []);
 
+  // 🔥 Wake up Render backend on page load (free tier sleeps after inactivity)
+  useEffect(() => {
+    fetch(`${SERVER_URL}/`).catch(() => { }); // silent ping — ignore errors
+  }, []);
+
   useEffect(() => {
     fetchFeed();
   }, [fetchFeed]);
@@ -532,9 +537,25 @@ export default function App() {
           result && (
             <div className="result-block">
               <h3>Your Vibe</h3>
+
+              {/* Mood Label */}
+              {result.moodLabel && (
+                <p className="mood-label">🎭 {result.moodLabel}</p>
+              )}
+
               {result.interpretation && (
                 <p className="interpretation">{result.interpretation}</p>
               )}
+
+              {/* Vibe Tag Pills */}
+              {result.vibeTags && result.vibeTags.length > 0 && (
+                <div className="vibe-tags">
+                  {result.vibeTags.map((tag, i) => (
+                    <span key={i} className="vibe-tag">#{tag}</span>
+                  ))}
+                </div>
+              )}
+
               {result.songs && result.songs.length > 0 && (
                 <>
                   <div className="songs-list">
